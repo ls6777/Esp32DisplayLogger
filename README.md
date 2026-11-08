@@ -1,0 +1,98 @@
+# Esp32DisplayLogger
+ESP32 application built on [PrintfTask](https://github.com/ls6777/PrintfTask) and [TaskMonitor](https://github.com/ls6777/TaskMonitor)
+
+## Overview
+This project combines two reusable embedded components in one ESP-IDF application:
+
+- **PrintfTask** buffers all `printf` output in RAM and sends it to the UART from a low priority task, so `printf` returns quickly and doesn't block time critical tasks.
+- **TaskMonitor** makes sure every registered task keeps checking in. If a task stops responding, the monitor logs the task's name and stops kicking the watchdog, so the device resets.
+
+The current application is a hello world: a single `HelloTask` prints a message once a second through the printf buffer and checks in with the task monitor when asked.
+
+The example application runs on an ESP32 (ESP-WROVER-KIT) with ESP-IDF and FreeRTOS. Both components are RTOS and target agnostic: all OS and target calls go through a small port layer.
+
+## Project layout
+```
+CMakeLists.txt                ESP-IDF project
+sdkconfig.defaults            Settings the project relies on (tick rate, task watchdog, run-time stats)
+components/
+  common/                     Shared by all tasks
+    Inc/TargetPort.hpp        Port layer: queues, task IDs, time, watchdog, task statistics
+    Src/TargetPort.cpp        Port layer implementation for FreeRTOS on ESP-IDF
+    Inc/Message.hpp           Message posted to a task's queue
+    Inc/Utils.hpp             Small shared helpers
+  printf_task/                From PrintfTask
+    Inc/PrintfTask.hpp        The printf task: sends buffered output to the real stdout
+    Inc/PrintUtils.hpp        Generic stdout API that owns the printf buffer
+    Inc/PrintBuffer.hpp       Generic circular buffer (no RTOS/target code)
+    Inc/StdOutPort.hpp        Port layer: stdout redirect and real stdout write
+    Src/StdOutPort.cpp        Port layer implementation for ESP-IDF (Picolibc and Newlib)
+  task_monitor/               From TaskMonitor
+    Inc/TaskMonitor.hpp       The task monitor task (message handling, watchdog, violation action)
+    Inc/CheckinTracker.hpp    Generic monitor logic: checkin timing, requests, violations (no RTOS/target code)
+main/
+  main.cpp                    Sets up stdout buffering and the task monitor, then creates the tasks
+  Inc|Src/HelloTask.*         Hello world: prints every second, 5 s task monitor timeout
+test/                         Host unit tests for PrintBuffer, PrintUtils and CheckinTracker (Unity)
+```
+
+## Tasks
+| Task | Priority | Purpose |
+|---|---|---|
+| TaskMonitor | Highest | Checks every registered task and kicks the watchdog |
+| HelloTask | 5 | Prints "Hello world!" every second, and the printf buffer high water mark every 10 seconds |
+| PrintfTask | 1 (lowest) | Sends buffered printf output to the UART every 10 ms |
+
+`app_main()` redirects stdout into the printf buffer before creating any task, so all task output is buffered. It also creates the task monitor's queue first, so tasks can register however they get scheduled.
+
+## Adding a task
+Follow `HelloTask`:
+
+1. Create a message queue in `Initialize()` and post `Message::INITIALIZE` to it.
+2. On `INITIALIZE`, register with the task monitor: `TaskMonitor::Register(CHECKIN_TIMEOUT, &TaskCheckin);`
+3. `TaskCheckin()` posts `Message::TASK_CHECKIN` to the task's own queue. On that message, call `TaskMonitor::TaskCheckin()`.
+4. Use `printf` as usual. The output goes through the printf buffer.
+
+Use `PrintUtils::GetHighWaterMark()` to size the printf buffer (`PrintUtils::BUFFER_SIZE`, 15000 bytes by default).
+
+See the [PrintfTask](https://github.com/ls6777/PrintfTask) and [TaskMonitor](https://github.com/ls6777/TaskMonitor) READMEs for details on each component, including timing measurements and how to port them.
+
+## Building
+Tested with ESP-IDF v6.1. From an ESP-IDF terminal:
+
+```
+idf.py set-target esp32
+idf.py build
+idf.py -p COM3 flash monitor
+```
+
+Expected output:
+```
+Task Monitor Initialized
+HelloTask Initialized
+Hello world! 1
+Hello world! 2
+...
+Hello world! 10
+Printf buffer high water mark: 67 of 14999 bytes
+```
+
+`sdkconfig.defaults` holds the settings the project relies on, so they survive `idf.py set-target` and deleting `sdkconfig`:
+
+- `CONFIG_FREERTOS_HZ=1000`: 1 ms tick, for 10 ms task monitor evaluation and clean wrap-around of `GetTimeMs()`
+- `CONFIG_ESP_TASK_WDT_PANIC=y`: the task watchdog resets the device. Without it, a task monitor violation only prints a warning.
+- `CONFIG_FREERTOS_USE_TRACE_FACILITY`, `..._USE_STATS_FORMATTING_FUNCTIONS`, `..._GENERATE_RUN_TIME_STATS`: task statistics (`TargetPort::GetTaskList()`, `TargetPort::GetRunTimeStats()`)
+
+The project includes a shared VS Code setup (`.vscode/c_cpp_properties.json` and `extensions.json`) for the ESP-IDF and C/C++ extensions. Code navigation uses `build/compile_commands.json`, so build once first.
+
+## Unit tests
+The generic parts of both components have host unit tests in `test/`, using the Unity framework that ships with ESP-IDF. They need `IDF_PATH` set and a host gcc, CMake and Ninja (e.g. MinGW from WinLibs on Windows):
+
+```
+cmake -S test -B test/build -G Ninja
+cmake --build test/build
+ctest --test-dir test/build --output-on-failure
+```
+
+## Targets
+The application runs on an ESP32 (ESP-WROVER-KIT) with ESP-IDF and FreeRTOS. Porting to another target or RTOS only means changing the port layers: `TargetPort.hpp/.cpp` and `StdOutPort.cpp`.

@@ -1,0 +1,59 @@
+# Host (PC) unit tests for the target independent parts of the printf_task and task_monitor components.
+#
+# Uses the Unity test framework that ships with ESP-IDF, so IDF_PATH must be set (or pass -DUNITY_DIR=<path
+# to Unity's src directory>). Requires a host C and C++ compiler (e.g. gcc/g++ from MinGW).
+#
+# Build and run:
+#   cmake -S test -B test/build -G Ninja
+#   cmake --build test/build
+#   ctest --test-dir test/build --output-on-failure
+cmake_minimum_required(VERSION 3.22)
+project(Esp32DisplayLoggerTests C CXX)
+
+# Unity is C, the project code and tests are C++
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+# Lets VS Code (C/C++ extension) resolve includes in the test files
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(UNITY_DIR "$ENV{IDF_PATH}/components/unity/unity/src" CACHE PATH "Path to the Unity test framework src directory")
+if(NOT EXISTS "${UNITY_DIR}/unity.c")
+    message(FATAL_ERROR "Unity not found at '${UNITY_DIR}'. Set IDF_PATH or pass -DUNITY_DIR=<path to Unity src>.")
+endif()
+
+add_library(unity STATIC ${UNITY_DIR}/unity.c)
+target_include_directories(unity PUBLIC ${UNITY_DIR})
+
+set(PRINTF_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/printf_task)
+set(MONITOR_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/task_monitor)
+
+# PrintBuffer is header only and has no target dependencies
+add_executable(test_PrintBuffer
+    test_PrintBuffer.cpp
+)
+target_include_directories(test_PrintBuffer PRIVATE ${PRINTF_DIR}/Inc)
+
+# PrintUtils (and the PrintBuffer it owns) with a fake StdOutPort (defined in the test), so no target code is needed
+add_executable(test_PrintUtils
+    test_PrintUtils.cpp
+    ${PRINTF_DIR}/Src/PrintUtils.cpp
+)
+target_include_directories(test_PrintUtils PRIVATE ${PRINTF_DIR}/Inc)
+
+# CheckinTracker is header only and has no target dependencies
+add_executable(test_CheckinTracker
+    test_CheckinTracker.cpp
+)
+target_include_directories(test_CheckinTracker PRIVATE ${MONITOR_DIR}/Inc)
+
+enable_testing()
+foreach(name PrintBuffer PrintUtils CheckinTracker)
+    target_link_libraries(test_${name} PRIVATE unity)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)
+    endif()
+    add_test(NAME ${name} COMMAND test_${name})
+endforeach()
