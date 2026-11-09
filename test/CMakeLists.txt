@@ -1,4 +1,4 @@
-# Host (PC) unit tests for the target independent parts of the printf_task and task_monitor components.
+# Host (PC) unit tests for the target independent parts of the printf_task, task_monitor and display components.
 #
 # Uses the Unity test framework that ships with ESP-IDF, so IDF_PATH must be set (or pass -DUNITY_DIR=<path
 # to Unity's src directory>). Requires a host C and C++ compiler (e.g. gcc/g++ from MinGW).
@@ -29,6 +29,7 @@ target_include_directories(unity PUBLIC ${UNITY_DIR})
 
 set(PRINTF_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/printf_task)
 set(MONITOR_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/task_monitor)
+set(DISPLAY_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/display)
 
 # PrintBuffer is header only and has no target dependencies
 add_executable(test_PrintBuffer
@@ -49,8 +50,16 @@ add_executable(test_CheckinTracker
 )
 target_include_directories(test_CheckinTracker PRIVATE ${MONITOR_DIR}/Inc)
 
+# TextRenderer and the font have no target dependencies (Display and DisplayPort are not tested)
+add_executable(test_TextRenderer
+    test_TextRenderer.cpp
+    ${DISPLAY_DIR}/Src/TextRenderer.cpp
+    ${DISPLAY_DIR}/Src/Font5x7.cpp
+)
+target_include_directories(test_TextRenderer PRIVATE ${DISPLAY_DIR}/Inc)
+
 enable_testing()
-foreach(name PrintBuffer PrintUtils CheckinTracker)
+foreach(name PrintBuffer PrintUtils CheckinTracker TextRenderer)
     target_link_libraries(test_${name} PRIVATE unity)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)

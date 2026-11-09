@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "Display.hpp"
 #include "HelloTask.hpp"
 #include "PrintfTask.hpp"
 #include "TaskMonitor.hpp"
@@ -56,12 +57,15 @@ static void StartHelloTask(void* argument)
 //------------------------------------------------------------------
 // Main Task
 //------------------------------------------------------------------
-/// @brief Application entry point: sets up stdout buffering and the task monitor, then creates the tasks
+/// @brief Application entry point: sets up stdout buffering, the display and the task monitor, then creates the tasks
 /// @details Returns once the tasks are created. ESP-IDF then deletes the main task.
 void app_main(void)
 {
     // Route printf into the printf buffer before any task prints, so all task output is buffered
     PrintfTask::Initialize();
+
+    // Set up the LCD before any task draws on it (blocks for a few hundred ms during the panel reset)
+    Display::Initialize();
 
     // Create the task monitor's queue before any task can register with it
     TaskMonitor::Initialize();

@@ -9,6 +9,7 @@
             "includePath": [
                 "${workspaceFolder}/main/Inc",
                 "${workspaceFolder}/components/common/Inc",
+                "${workspaceFolder}/components/display/Inc",
                 "${workspaceFolder}/components/printf_task/Inc",
                 "${workspaceFolder}/components/task_monitor/Inc"
             ]
