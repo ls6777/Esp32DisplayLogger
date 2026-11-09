@@ -30,6 +30,12 @@ target_include_directories(unity PUBLIC ${UNITY_DIR})
 set(PRINTF_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/printf_task)
 set(MONITOR_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/task_monitor)
 set(DISPLAY_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/display)
+set(COMMON_DIR ${CMAKE_CURRENT_LIST_DIR}/../components/common)
+set(MAIN_DIR ${CMAKE_CURRENT_LIST_DIR}/../main)
+
+# Host implementation of the OS port layer (TargetPort) and test helpers. Code that uses TargetPort must list this
+# directory before ${COMMON_DIR}/Inc, so the fake TargetPort.hpp and Utils.hpp are found instead of the real ones.
+set(FAKES_DIR ${CMAKE_CURRENT_LIST_DIR}/fakes)
 
 # PrintBuffer is header only and has no target dependencies
 add_executable(test_PrintBuffer
@@ -50,7 +56,7 @@ add_executable(test_CheckinTracker
 )
 target_include_directories(test_CheckinTracker PRIVATE ${MONITOR_DIR}/Inc)
 
-# TextRenderer and the font have no target dependencies (Display and DisplayPort are not tested)
+# TextRenderer and the font have no target dependencies
 add_executable(test_TextRenderer
     test_TextRenderer.cpp
     ${DISPLAY_DIR}/Src/TextRenderer.cpp
@@ -58,8 +64,49 @@ add_executable(test_TextRenderer
 )
 target_include_directories(test_TextRenderer PRIVATE ${DISPLAY_DIR}/Inc)
 
+# Display with a fake DisplayPort (defined in the test)
+add_executable(test_Display
+    test_Display.cpp
+    ${DISPLAY_DIR}/Src/Display.cpp
+    ${DISPLAY_DIR}/Src/TextRenderer.cpp
+    ${DISPLAY_DIR}/Src/Font5x7.cpp
+)
+target_include_directories(test_Display PRIVATE ${DISPLAY_DIR}/Inc)
+
+# The printf task with the real PrintUtils, a fake StdOutPort (defined in the test) and the fake OS
+add_executable(test_PrintfTask
+    test_PrintfTask.cpp
+    ${PRINTF_DIR}/Src/PrintfTask.cpp
+    ${PRINTF_DIR}/Src/PrintUtils.cpp
+    ${FAKES_DIR}/TargetPort.cpp
+)
+target_include_directories(test_PrintfTask PRIVATE ${FAKES_DIR} ${PRINTF_DIR}/Inc ${COMMON_DIR}/Inc)
+
+# The task monitor task with the fake OS
+add_executable(test_TaskMonitor
+    test_TaskMonitor.cpp
+    ${MONITOR_DIR}/Src/TaskMonitor.cpp
+    ${FAKES_DIR}/TargetPort.cpp
+)
+target_include_directories(test_TaskMonitor PRIVATE ${FAKES_DIR} ${MONITOR_DIR}/Inc ${COMMON_DIR}/Inc)
+
+# HelloTask with the real TaskMonitor, PrintUtils and Display. Only the port layers are fakes: the OS, and
+# StdOutPort and DisplayPort (defined in the test).
+add_executable(test_HelloTask
+    test_HelloTask.cpp
+    ${MAIN_DIR}/Src/HelloTask.cpp
+    ${MONITOR_DIR}/Src/TaskMonitor.cpp
+    ${PRINTF_DIR}/Src/PrintUtils.cpp
+    ${DISPLAY_DIR}/Src/Display.cpp
+    ${DISPLAY_DIR}/Src/TextRenderer.cpp
+    ${DISPLAY_DIR}/Src/Font5x7.cpp
+    ${FAKES_DIR}/TargetPort.cpp
+)
+target_include_directories(test_HelloTask PRIVATE
+    ${FAKES_DIR} ${MAIN_DIR}/Inc ${COMMON_DIR}/Inc ${PRINTF_DIR}/Inc ${MONITOR_DIR}/Inc ${DISPLAY_DIR}/Inc)
+
 enable_testing()
-foreach(name PrintBuffer PrintUtils CheckinTracker TextRenderer)
+foreach(name PrintBuffer PrintUtils CheckinTracker TextRenderer Display PrintfTask TaskMonitor HelloTask)
     target_link_libraries(test_${name} PRIVATE unity)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)

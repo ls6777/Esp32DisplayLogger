@@ -41,7 +41,8 @@ components/
 main/
   main.cpp                    Sets up stdout buffering, the display and the task monitor, then creates the tasks
   Inc|Src/HelloTask.*         Hello world: LCD text once, prints every second, 5 s task monitor timeout
-test/                         Host unit tests for PrintBuffer, PrintUtils, CheckinTracker and TextRenderer (Unity)
+test/                         Host unit tests (Unity)
+  fakes/                      Host OS port layer (TargetPort) and test helpers
 ```
 
 ## Tasks
@@ -110,13 +111,28 @@ Printf buffer high water mark: 67 of 14999 bytes
 The project includes a shared VS Code setup (`.vscode/c_cpp_properties.json` and `extensions.json`) for the ESP-IDF and C/C++ extensions. Code navigation uses `build/compile_commands.json`, so build once first.
 
 ## Unit tests
-The generic parts of all components have host unit tests in `test/`, using the Unity framework that ships with ESP-IDF. They need `IDF_PATH` set and a host gcc, CMake and Ninja (e.g. MinGW from WinLibs on Windows):
+All the target independent code has host unit tests in `test/`, using the Unity framework that ships with ESP-IDF. They need `IDF_PATH` set and a host gcc, CMake and Ninja (e.g. MinGW from WinLibs on Windows):
 
 ```
 cmake -S test -B test/build -G Ninja
 cmake --build test/build
 ctest --test-dir test/build --output-on-failure
 ```
+
+| Test | Code under test | Fakes |
+|---|---|---|
+| `test_PrintBuffer` | `PrintBuffer` | none |
+| `test_PrintUtils` | `PrintUtils` | `StdOutPort` |
+| `test_PrintfTask` | `PrintfTask`, with the real `PrintUtils` | `StdOutPort`, OS |
+| `test_CheckinTracker` | `CheckinTracker` | none |
+| `test_TaskMonitor` | `TaskMonitor` task: requests, violations, watchdog, statistics | OS |
+| `test_TextRenderer` | `TextRenderer`, `Font5x7` (including glyph shapes as ASCII art) | none |
+| `test_Display` | `Display`: positions, scaling, clipping | `DisplayPort` |
+| `test_HelloTask` | `HelloTask`, with the real `TaskMonitor`, `PrintUtils` and `Display` | `StdOutPort`, `DisplayPort`, OS |
+
+The tasks run their real `Run()` loops on a host implementation of the OS port layer ([test/fakes/TargetPort.hpp](test/fakes/TargetPort.hpp)): in-memory queues and a clock that advances when a task waits. Since `Run()` never returns, the fake ends it by throwing when a call budget runs out or when the task would block forever.
+
+The port layer implementations (`TargetPort.cpp`, `StdOutPort.cpp`, `DisplayPort.cpp`) and `main.cpp` call ESP-IDF and FreeRTOS directly, so they are verified on the board instead.
 
 ## Targets
 The application runs on an ESP32 (ESP-WROVER-KIT) with ESP-IDF and FreeRTOS. Porting to another target or RTOS only means changing the port layers: `TargetPort.hpp/.cpp`, `StdOutPort.cpp` and `DisplayPort.cpp`.
