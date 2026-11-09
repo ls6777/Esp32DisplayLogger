@@ -1,44 +1,24 @@
 /// @file test_HelloTask.cpp
 /// @brief Host unit tests for HelloTask.cpp.
-/// @details Uses the real TaskMonitor, PrintUtils, Display, TextRenderer and font. Only the port layers are fakes:
-///          the OS (fakes/TargetPort.hpp), StdOutPort and DisplayPort (defined here).
+/// @details Uses the real TaskMonitor and PrintUtils. Only the port layers are fakes: the OS (fakes/TargetPort.hpp) and
+///          StdOutPort (defined here).
 
 #include "HelloTask.hpp"
 
-#include "Display.hpp"
-#include "DisplayPort.hpp"
 #include "PrintUtils.hpp"
 #include "StdOutPort.hpp"
 #include "StdoutCapture.hpp"
 #include "TargetPort.hpp"
 #include "TaskMonitor.hpp"
-#include "TextRenderer.hpp"
 
 #include "unity.h"
 
 #include <cstdlib>
-#include <cstring>
 #include <string>
 #include <vector>
 
 namespace
 {
-    constexpr int WIDTH = 320;      ///< Width of the fake panel
-    constexpr int HEIGHT = 240;     ///< Height of the fake panel
-
-    /// @brief One DisplayPort::DrawBitmap() call
-    struct Bitmap
-    {
-        int x;                          ///< Left edge
-        int y;                          ///< Top edge
-        int w;                          ///< Width
-        int h;                          ///< Height
-        std::vector<uint16_t> pixels;   ///< Copy of the pixels
-    };
-
-    std::vector<Bitmap> bitmaps;    ///< Every DrawBitmap() call, in order
-    int fills = 0;                  ///< Number of FillRect() calls
-
     FakeTask helloTask{"HelloTask"};    ///< The task running HelloTask
 
     QHandle monitorQ = nullptr;     ///< The task monitor's queue
@@ -106,45 +86,10 @@ int StdOutPort::Write(const char* data, int len)
     return len;
 }
 
-//------------------------------------------------------------------
-// Fake DisplayPort
-//------------------------------------------------------------------
-void DisplayPort::Initialize() {}
-
-void DisplayPort::BacklightOn() {}
-
-int DisplayPort::GetWidth()
-{
-    return WIDTH;
-}
-
-int DisplayPort::GetHeight()
-{
-    return HEIGHT;
-}
-
-void DisplayPort::FillRect(int x, int y, int w, int h, uint16_t color)
-{
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    (void)color;
-    fills++;
-}
-
-void DisplayPort::DrawBitmap(int x, int y, int w, int h, const uint16_t* pixels)
-{
-    bitmaps.push_back(Bitmap{x, y, w, h, std::vector<uint16_t>(pixels, pixels + (w * h))});
-}
-
 /// @brief Unity: called before each test. Creates the task monitor's queue, then HelloTask's (holding INITIALIZE).
 void setUp(void)
 {
     FakeTargetPort::Reset();
-    bitmaps.clear();
-    fills = 0;
-
     TaskMonitor::Initialize();
     monitorQ = FakeTargetPort::sent.back().queue;
 
@@ -182,44 +127,6 @@ void test_HandleInitialize_RegistersWithMonitor(void)
     TEST_ASSERT_EQUAL_PTR(&HelloTask::TaskCheckin, msgs[1].checkinCall);
 
     TEST_ASSERT_EQUAL(1, StdoutCapture::Count(printed, "HelloTask Initialized"));
-}
-
-/// @brief On INITIALIZE the task draws "Hello World!" centered, white on black, 24x32 pixels per character
-void test_HandleInitialize_DrawsHelloWorldCentered(void)
-{
-    RunHello(1);
-
-    const char* text = "Hello World!";
-    const int count = static_cast<int>(std::strlen(text));
-    constexpr int SCALE = 4;
-    constexpr int CHAR_W = TextRenderer::CHAR_WIDTH * SCALE;
-    constexpr int CHAR_H = TextRenderer::CHAR_HEIGHT * SCALE;
-    const int left = (WIDTH - (count * CHAR_W)) / 2;
-    const int top = (HEIGHT - CHAR_H) / 2;
-
-    TEST_ASSERT_EQUAL(16, left);    // 320 - 12 * 24 = 32, split evenly
-    TEST_ASSERT_EQUAL(104, top);    // 240 - 32 = 208, split evenly
-    TEST_ASSERT_EQUAL(count, bitmaps.size());
-    TEST_ASSERT_EQUAL(0, fills);    // the screen is cleared by Display::Initialize(), not the task
-
-    std::vector<uint16_t> expected(TextRenderer::CellPixels(SCALE));
-    for (int i = 0; i < count; i++)
-    {
-        TEST_ASSERT_EQUAL(left + (i * CHAR_W), bitmaps[i].x);
-        TEST_ASSERT_EQUAL(top, bitmaps[i].y);
-        TEST_ASSERT_EQUAL(CHAR_W, bitmaps[i].w);
-        TEST_ASSERT_EQUAL(CHAR_H, bitmaps[i].h);
-
-        TextRenderer::RenderChar(text[i], Color::WHITE, Color::BLACK, SCALE, expected.data());
-        TEST_ASSERT_EQUAL_HEX16_ARRAY(expected.data(), bitmaps[i].pixels.data(), expected.size());
-    }
-}
-
-/// @brief The text is drawn only once: saying hello afterwards doesn't touch the display
-void test_DisplayDrawnOnlyOnce(void)
-{
-    RunHello(1 + 5);    // INITIALIZE, then 5 hellos
-    TEST_ASSERT_EQUAL(12, bitmaps.size());
 }
 
 /// @brief While idle, the task says hello once a second with a counter that goes up by one each time
@@ -321,8 +228,6 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_Initialize_PostsInitialize);
     RUN_TEST(test_HandleInitialize_RegistersWithMonitor);
-    RUN_TEST(test_HandleInitialize_DrawsHelloWorldCentered);
-    RUN_TEST(test_DisplayDrawnOnlyOnce);
     RUN_TEST(test_SaysHelloEverySecond);
     RUN_TEST(test_EveryTenthHello_PrintsHighWaterMark);
     RUN_TEST(test_TaskCheckin_PostsToOwnQueue);

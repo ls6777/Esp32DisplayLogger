@@ -362,6 +362,98 @@ void test_Art_LookAlikes(void)
                    "......"});
 }
 
+/// @brief Rotated cells swap width and height; the pixel count is the same
+void test_CellSize_Rotation(void)
+{
+    using Rotation = TextRenderer::Rotation;
+    for (int scale = 1; scale <= 4; scale++)
+    {
+        TEST_ASSERT_EQUAL(6 * scale, TextRenderer::CellWidth(scale, Rotation::NONE));
+        TEST_ASSERT_EQUAL(8 * scale, TextRenderer::CellHeight(scale, Rotation::NONE));
+        TEST_ASSERT_EQUAL(8 * scale, TextRenderer::CellWidth(scale, Rotation::CW90));
+        TEST_ASSERT_EQUAL(6 * scale, TextRenderer::CellHeight(scale, Rotation::CW90));
+        TEST_ASSERT_EQUAL(TextRenderer::CellPixels(scale),
+                          TextRenderer::CellWidth(scale, Rotation::CW90) * TextRenderer::CellHeight(scale, Rotation::CW90));
+    }
+}
+
+/// @brief Rotated clockwise, 'L' becomes a bar along the top with a stem down the left: the top of the glyph faces
+///        right, the spacing row is the left column and the spacing column is the bottom row
+void test_Art_RotatedL(void)
+{
+    constexpr int W = TextRenderer::CHAR_HEIGHT;    // rotated cell is 8 wide, 6 high
+    constexpr int H = TextRenderer::CHAR_WIDTH;
+    std::vector<uint16_t> buf(TextRenderer::CellPixels(1));
+    TextRenderer::RenderChar('L', FG, BG, 1, buf.data(), TextRenderer::Rotation::CW90);
+
+    const char* expected[H] = {".#######",
+                               ".#......",
+                               ".#......",
+                               ".#......",
+                               ".#......",
+                               "........"};
+    for (int y = 0; y < H; y++)
+    {
+        std::string row;
+        for (int x = 0; x < W; x++)
+        {
+            row += (buf[(y * W) + x] == FG) ? '#' : '.';
+        }
+        TEST_ASSERT_EQUAL_STRING(expected[y], row.c_str());
+    }
+}
+
+/// @brief For every character and scale, the rotated cell is exactly the unrotated cell turned 90 degrees clockwise
+void test_Rotation_IsClockwiseTurn(void)
+{
+    for (int scale = 1; scale <= 4; scale++)
+    {
+        const int w = TextRenderer::CHAR_WIDTH * scale;     // unrotated size
+        const int h = TextRenderer::CHAR_HEIGHT * scale;
+        for (char c = Font5x7::FIRST_CHAR; c <= Font5x7::LAST_CHAR; c++)
+        {
+            const std::vector<uint16_t> normal = Render(c, scale);
+            std::vector<uint16_t> rotated(TextRenderer::CellPixels(scale), 0x1234);
+            TextRenderer::RenderChar(c, FG, BG, scale, rotated.data(), TextRenderer::Rotation::CW90);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    // Clockwise: (x, y) in a w x h cell lands at (h - 1 - y, x) in an h x w cell
+                    TEST_ASSERT_EQUAL_HEX16(normal[(y * w) + x], rotated[(x * h) + (h - 1 - y)]);
+                }
+            }
+        }
+    }
+}
+
+/// @brief Rotated rendering also writes the whole cell and nothing past it
+void test_RenderRotatedStaysInCell(void)
+{
+    constexpr uint16_t CANARY = 0x5A5A;
+    constexpr int GUARD = 16;
+
+    for (int scale = 1; scale <= 4; scale++)
+    {
+        const int cell = TextRenderer::CellPixels(scale);
+        for (int c = 0; c <= 0xFF; c++)
+        {
+            std::vector<uint16_t> buf(cell + GUARD, CANARY);
+            TextRenderer::RenderChar(static_cast<char>(c), FG, BG, scale, buf.data(), TextRenderer::Rotation::CW90);
+
+            for (int i = 0; i < cell; i++)
+            {
+                TEST_ASSERT_TRUE_MESSAGE((buf[i] == FG) || (buf[i] == BG), "pixel not written");
+            }
+            for (int i = cell; i < cell + GUARD; i++)
+            {
+                TEST_ASSERT_EQUAL_HEX16_MESSAGE(CANARY, buf[i], "wrote past the cell");
+            }
+        }
+    }
+}
+
 /// @brief Run all tests
 /// @return number of failed tests (0 if all passed)
 int main(void)
@@ -378,6 +470,10 @@ int main(void)
     RUN_TEST(test_ColorsAndSpacing);
     RUN_TEST(test_Art_HelloWorld);
     RUN_TEST(test_Art_LookAlikes);
+    RUN_TEST(test_CellSize_Rotation);
+    RUN_TEST(test_Art_RotatedL);
+    RUN_TEST(test_Rotation_IsClockwiseTurn);
+    RUN_TEST(test_RenderRotatedStaysInCell);
     RUN_TEST(test_Rgb565);
     return UNITY_END();
 }

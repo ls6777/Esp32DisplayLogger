@@ -2,7 +2,6 @@
 /// @brief Hello world task implementation (see HelloTask.hpp).
 
 #include "HelloTask.hpp"
-#include "Display.hpp"
 #include "PrintUtils.hpp"
 #include "TaskMonitor.hpp"
 #include "Utils.hpp"
@@ -15,8 +14,6 @@ namespace
     constexpr uint32_t HELLO_PERIOD = 1 * MS_PER_SEC;       ///< Period (ms) for printing the hello message
     constexpr uint32_t CHECKIN_TIMEOUT = 5 * MS_PER_SEC;    ///< Task monitor timeout (ms)
     constexpr uint32_t STATS_EVERY = 10;                    ///< Print the high water mark every this many hellos
-    constexpr const char* DISPLAY_TEXT = "Hello World!";    ///< Text shown on the LCD
-    constexpr int DISPLAY_TEXT_SCALE = 4;                   ///< Size of the LCD text (24x32 pixels per character)
 }
 
 QHandle HelloTask::msgQHandle = nullptr;
@@ -107,11 +104,6 @@ void HelloTask::HandleInitialize()
     // Register this task with the Task Monitor
     TaskMonitor::Register(CHECKIN_TIMEOUT, &TaskCheckin);
     printf("HelloTask Initialized\r\n");
-
-    // Say hello on the LCD, once, centered
-    const int x = (Display::GetWidth() - Display::TextWidth(DISPLAY_TEXT, DISPLAY_TEXT_SCALE)) / 2;
-    const int y = (Display::GetHeight() - (TextRenderer::CHAR_HEIGHT * DISPLAY_TEXT_SCALE)) / 2;
-    Display::DrawString(x, y, DISPLAY_TEXT, Color::WHITE, Color::BLACK, DISPLAY_TEXT_SCALE);
 }
 
 //------------------------------------------------------------------

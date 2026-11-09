@@ -115,6 +115,11 @@ class TargetPort
         /// @param[out] buf - buffer to write the null-terminated text to
         /// @param[in] size - size of the buffer, in bytes
         static void GetRunTimeStats(char* buf, size_t size);
+
+        /// @brief Read the fake CPU time counters (see FakeTargetPort::cpuBusyPercent)
+        /// @param[out] idleTime - FakeTargetPort::cpuIdleTime
+        /// @param[out] totalTime - FakeTargetPort::cpuTotalTime
+        static void GetCpuTimes(uint32_t& idleTime, uint32_t& totalTime);
 };
 
 /// @brief Thrown by the fake to end a task's Run() loop (see the file description)
@@ -150,14 +155,20 @@ class FakeTargetPort
         FakeTargetPort() = delete;
 
         /// @brief Delete all queues and clear the records, budgets and hooks
-        /// @details The clock is left as it is: the code under test keeps times in static variables, so time must
-        ///          never go backwards within one test program.
+        /// @details The clock and CPU time counters are left as they are: the code under test keeps times in static
+        ///          variables, so time must never go backwards within one test program. cpuBusyPercent is set to 0.
         static void Reset();
 
         /// @brief Called by LOG_ERROR: counts the error and keeps its tag and formatted message
         /// @param[in] tag - tag of the error
         /// @param[in] format - printf style format string, followed by its arguments
         static void RecordError(const char* tag, const char* format, ...) __attribute__((format(printf, 2, 3)));
+
+        /// @brief Advance the fake clock, and the CPU time counters with it
+        /// @details The counters model FAKE_CORES cores in microseconds: the total grows by the elapsed time times the
+        ///          cores, and the idle time by the part of that not busy (cpuBusyPercent).
+        /// @param[in] ms - time to advance, in ms
+        static void AdvanceTime(uint32_t ms);
 
         /// @brief Called by DELAY: records the delay and advances the clock
         /// @details Calls onDelay first. Throws StopRun if the delay is MAX_DELAY or the budget is used up.
@@ -174,11 +185,18 @@ class FakeTargetPort
         /// @return items sent to other queues
         static std::vector<SentItem> SentToOtherQueues(QHandle q);
 
+        static constexpr uint32_t FAKE_CORES = 2;   ///< Number of cores modelled by the CPU time counters
+
         static uint32_t timeMs;             ///< The fake clock, in ms (= ticks)
+        static uint32_t cpuBusyPercent;     ///< CPU load while time advances, 0 to 100 %
+        static uint32_t cpuIdleTime;        ///< Idle time counter returned by GetCpuTimes() (us, all cores)
+        static uint32_t cpuTotalTime;       ///< Total time counter returned by GetCpuTimes() (us times cores)
         static TaskHandle currentTask;      ///< Task returned by GetCurrTaskHandle()
         static int recvBudget;              ///< QRecv() calls left before StopRun (negative = unlimited)
         static int delayBudget;             ///< DELAY() calls left before StopRun (negative = unlimited)
         static std::function<void()> onDelay;   ///< Called at the start of every DELAY() (e.g. to inject data)
+        static std::function<void()> onRecv;    ///< Called at the start of every QRecv() within the budget (e.g. to
+                                                ///< advance time and post a message, as if it arrived during a wait)
         static std::vector<uint32_t> delays;    ///< Every DELAY() argument, in order
         static std::vector<SentItem> sent;      ///< Every item successfully sent to any queue, in order
         static int watchdogStarts;          ///< Number of StartWatchdog() calls

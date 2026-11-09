@@ -32,14 +32,17 @@ namespace
 
     std::vector<Call> calls;    ///< Every call made to the fake DisplayPort, in order
 
+    using Rotation = TextRenderer::Rotation;    ///< Text orientation
+
     /// @brief Render a character the way Display should
     /// @param[in] c - character
     /// @param[in] scale - size multiplier
+    /// @param[in] rotation - orientation
     /// @return the expected pixels
-    std::vector<uint16_t> Expected(char c, int scale)
+    std::vector<uint16_t> Expected(char c, int scale, Rotation rotation)
     {
         std::vector<uint16_t> buf(TextRenderer::CellPixels(scale));
-        TextRenderer::RenderChar(c, FG, BG, scale, buf.data());
+        TextRenderer::RenderChar(c, FG, BG, scale, buf.data(), rotation);
         return buf;
     }
 
@@ -49,14 +52,15 @@ namespace
     /// @param[in] x - expected left edge
     /// @param[in] y - expected top edge
     /// @param[in] scale - expected size multiplier
-    void CheckChar(const Call& call, char c, int x, int y, int scale)
+    /// @param[in] rotation - expected orientation
+    void CheckChar(const Call& call, char c, int x, int y, int scale, Rotation rotation = Rotation::NONE)
     {
         TEST_ASSERT_EQUAL_STRING("DrawBitmap", call.name.c_str());
         TEST_ASSERT_EQUAL(x, call.x);
         TEST_ASSERT_EQUAL(y, call.y);
-        TEST_ASSERT_EQUAL(TextRenderer::CHAR_WIDTH * scale, call.w);
-        TEST_ASSERT_EQUAL(TextRenderer::CHAR_HEIGHT * scale, call.h);
-        const std::vector<uint16_t> expected = Expected(c, scale);
+        TEST_ASSERT_EQUAL(TextRenderer::CellWidth(scale, rotation), call.w);
+        TEST_ASSERT_EQUAL(TextRenderer::CellHeight(scale, rotation), call.h);
+        const std::vector<uint16_t> expected = Expected(c, scale, rotation);
         TEST_ASSERT_EQUAL(expected.size(), call.pixels.size());
         TEST_ASSERT_EQUAL_HEX16_ARRAY(expected.data(), call.pixels.data(), expected.size());
     }
@@ -240,6 +244,65 @@ void test_DrawString_UnknownCharacter(void)
     CheckChar(calls[0], '?', 0, 0, 1);
 }
 
+/// @brief Rotated text runs top to bottom in 16x12 cells (scale 2), each character rotated
+void test_DrawString_Rotated_RunsDown(void)
+{
+    Display::DrawString(0, 0, "Hi!", FG, BG, 2, Rotation::CW90);
+
+    TEST_ASSERT_EQUAL(3, calls.size());
+    CheckChar(calls[0], 'H', 0, 0, 2, Rotation::CW90);
+    CheckChar(calls[1], 'i', 0, 12, 2, Rotation::CW90);
+    CheckChar(calls[2], '!', 0, 24, 2, Rotation::CW90);
+}
+
+/// @brief Rotated text stops at the bottom edge; a character ending exactly on the edge is drawn
+void test_DrawString_Rotated_ClipsAtBottomEdge(void)
+{
+    // 6 pixel high cells starting at 222: 222, 228, 234 (ends at 240, fits), 240 (doesn't fit)
+    Display::DrawString(0, HEIGHT - 18, "ABCD", FG, BG, 1, Rotation::CW90);
+
+    TEST_ASSERT_EQUAL(3, calls.size());
+    CheckChar(calls[0], 'A', 0, 222, 1, Rotation::CW90);
+    CheckChar(calls[1], 'B', 0, 228, 1, Rotation::CW90);
+    CheckChar(calls[2], 'C', 0, 234, 1, Rotation::CW90);
+}
+
+/// @brief Rotated cells are 8 pixels wide (scale 1), so they need 8 pixels to the right edge
+void test_DrawString_Rotated_RightEdge(void)
+{
+    Display::DrawString(WIDTH - 8, 0, "A", FG, BG, 1, Rotation::CW90);
+    TEST_ASSERT_EQUAL(1, calls.size());
+    CheckChar(calls[0], 'A', WIDTH - 8, 0, 1, Rotation::CW90);
+
+    calls.clear();
+    Display::DrawString(WIDTH - 7, 0, "A", FG, BG, 1, Rotation::CW90);
+    TEST_ASSERT_EQUAL(0, calls.size());
+}
+
+/// @brief DrawChar draws one cell, in either orientation
+void test_DrawChar_Draws(void)
+{
+    TEST_ASSERT_TRUE(Display::DrawChar(10, 20, 'Q', FG, BG, 2));
+    TEST_ASSERT_TRUE(Display::DrawChar(100, 50, 'Q', FG, BG, 1, Rotation::CW90));
+
+    TEST_ASSERT_EQUAL(2, calls.size());
+    CheckChar(calls[0], 'Q', 10, 20, 2);
+    CheckChar(calls[1], 'Q', 100, 50, 1, Rotation::CW90);
+}
+
+/// @brief DrawChar draws a cell that ends exactly on the right and bottom edges, and nothing that would go past them
+void test_DrawChar_Edges(void)
+{
+    TEST_ASSERT_TRUE(Display::DrawChar(WIDTH - 8, HEIGHT - 6, 'A', FG, BG, 1, Rotation::CW90));
+    TEST_ASSERT_FALSE(Display::DrawChar(WIDTH - 7, 0, 'A', FG, BG, 1, Rotation::CW90));
+    TEST_ASSERT_FALSE(Display::DrawChar(0, HEIGHT - 5, 'A', FG, BG, 1, Rotation::CW90));
+    TEST_ASSERT_FALSE(Display::DrawChar(-1, 0, 'A', FG, BG, 1));
+    TEST_ASSERT_FALSE(Display::DrawChar(0, -1, 'A', FG, BG, 1));
+
+    TEST_ASSERT_EQUAL(1, calls.size());
+    CheckChar(calls[0], 'A', WIDTH - 8, HEIGHT - 6, 1, Rotation::CW90);
+}
+
 /// @brief Run all tests
 /// @return number of failed tests (0 if all passed)
 int main(void)
@@ -258,5 +321,10 @@ int main(void)
     RUN_TEST(test_DrawString_PastBottomEdge);
     RUN_TEST(test_DrawString_NegativePosition);
     RUN_TEST(test_DrawString_UnknownCharacter);
+    RUN_TEST(test_DrawString_Rotated_RunsDown);
+    RUN_TEST(test_DrawString_Rotated_ClipsAtBottomEdge);
+    RUN_TEST(test_DrawString_Rotated_RightEdge);
+    RUN_TEST(test_DrawChar_Draws);
+    RUN_TEST(test_DrawChar_Edges);
     return UNITY_END();
 }

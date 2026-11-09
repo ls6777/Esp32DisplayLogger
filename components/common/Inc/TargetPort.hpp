@@ -111,4 +111,11 @@ class TargetPort
         /// @param[out] buf - buffer to write the null-terminated table to
         /// @param[in] size - size of the buffer, in bytes
         static void GetRunTimeStats(char* buf, size_t size);
+
+        /// @brief Read the counters used to measure CPU usage (see CpuUsage.hpp)
+        /// @details Both counters use the same unit and wrap around at 2^32, so only differences between two readings
+        ///          are meaningful.
+        /// @param[out] idleTime - time spent in the idle task, summed over all cores
+        /// @param[out] totalTime - elapsed time multiplied by the number of cores
+        static void GetCpuTimes(uint32_t& idleTime, uint32_t& totalTime);
 };

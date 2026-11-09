@@ -64,6 +64,12 @@ add_executable(test_TextRenderer
 )
 target_include_directories(test_TextRenderer PRIVATE ${DISPLAY_DIR}/Inc)
 
+# TextConsole is header only and has no target dependencies
+add_executable(test_TextConsole
+    test_TextConsole.cpp
+)
+target_include_directories(test_TextConsole PRIVATE ${DISPLAY_DIR}/Inc)
+
 # Display with a fake DisplayPort (defined in the test)
 add_executable(test_Display
     test_Display.cpp
@@ -90,23 +96,41 @@ add_executable(test_TaskMonitor
 )
 target_include_directories(test_TaskMonitor PRIVATE ${FAKES_DIR} ${MONITOR_DIR}/Inc ${COMMON_DIR}/Inc)
 
-# HelloTask with the real TaskMonitor, PrintUtils and Display. Only the port layers are fakes: the OS, and
-# StdOutPort and DisplayPort (defined in the test).
+# CpuUsage is header only and has no target dependencies
+add_executable(test_CpuUsage
+    test_CpuUsage.cpp
+)
+target_include_directories(test_CpuUsage PRIVATE ${COMMON_DIR}/Inc)
+
+# HelloTask with the real TaskMonitor and PrintUtils. Only the port layers are fakes: the OS, and StdOutPort (defined
+# in the test).
 add_executable(test_HelloTask
     test_HelloTask.cpp
     ${MAIN_DIR}/Src/HelloTask.cpp
     ${MONITOR_DIR}/Src/TaskMonitor.cpp
     ${PRINTF_DIR}/Src/PrintUtils.cpp
+    ${FAKES_DIR}/TargetPort.cpp
+)
+target_include_directories(test_HelloTask PRIVATE
+    ${FAKES_DIR} ${MAIN_DIR}/Inc ${COMMON_DIR}/Inc ${PRINTF_DIR}/Inc ${MONITOR_DIR}/Inc)
+
+# DisplayTask with the real TaskMonitor, Display, TextConsole, PrintBuffer and CpuUsage. Only the port layers are fakes: the OS (which also
+# simulates the CPU load), and DisplayPort (defined in the test).
+add_executable(test_DisplayTask
+    test_DisplayTask.cpp
+    ${MAIN_DIR}/Src/DisplayTask.cpp
+    ${MONITOR_DIR}/Src/TaskMonitor.cpp
     ${DISPLAY_DIR}/Src/Display.cpp
     ${DISPLAY_DIR}/Src/TextRenderer.cpp
     ${DISPLAY_DIR}/Src/Font5x7.cpp
     ${FAKES_DIR}/TargetPort.cpp
 )
-target_include_directories(test_HelloTask PRIVATE
-    ${FAKES_DIR} ${MAIN_DIR}/Inc ${COMMON_DIR}/Inc ${PRINTF_DIR}/Inc ${MONITOR_DIR}/Inc ${DISPLAY_DIR}/Inc)
+target_include_directories(test_DisplayTask PRIVATE
+    ${FAKES_DIR} ${MAIN_DIR}/Inc ${COMMON_DIR}/Inc ${MONITOR_DIR}/Inc ${DISPLAY_DIR}/Inc ${PRINTF_DIR}/Inc)
 
 enable_testing()
-foreach(name PrintBuffer PrintUtils CheckinTracker TextRenderer Display PrintfTask TaskMonitor HelloTask)
+foreach(name PrintBuffer PrintUtils CheckinTracker TextRenderer TextConsole Display PrintfTask TaskMonitor CpuUsage
+             HelloTask DisplayTask)
     target_link_libraries(test_${name} PRIVATE unity)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)

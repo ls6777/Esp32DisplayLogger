@@ -37,18 +37,35 @@ class Display
         static void Clear(uint16_t color);
 
         /// @brief Draw a line of text
-        /// @details Characters that don't fit on the screen are not drawn. No line wrapping.
+        /// @details Characters that don't fit on the screen are not drawn. No line wrapping. Unrotated text runs left
+        ///          to right. Text rotated 90 degrees clockwise runs top to bottom, with the tops of the characters
+        ///          facing right.
         /// @param[in] x - left edge of the text, in pixels
         /// @param[in] y - top edge of the text, in pixels
         /// @param[in] text - null-terminated text to draw
         /// @param[in] fg - text color
         /// @param[in] bg - background color of the text
         /// @param[in] scale - size multiplier, 1 to MAX_SCALE (1 = 6x8 pixels per character)
-        static void DrawString(int x, int y, const char* text, uint16_t fg, uint16_t bg, int scale);
+        /// @param[in] rotation - orientation of the text
+        static void DrawString(int x, int y, const char* text, uint16_t fg, uint16_t bg, int scale,
+                               TextRenderer::Rotation rotation = TextRenderer::Rotation::NONE);
 
-        /// @brief Get the size of a line of text
+        /// @brief Draw one character
+        /// @details Not drawn if any part of it would be off screen.
+        /// @param[in] x - left edge of the character cell, in pixels
+        /// @param[in] y - top edge of the character cell, in pixels
+        /// @param[in] c - character to draw (characters outside the font are shown as '?')
+        /// @param[in] fg - text color
+        /// @param[in] bg - background color of the cell
+        /// @param[in] scale - size multiplier, 1 to MAX_SCALE (1 = 6x8 pixels)
+        /// @param[in] rotation - orientation of the character
+        /// @return true if drawn, false if it didn't fit
+        static bool DrawChar(int x, int y, char c, uint16_t fg, uint16_t bg, int scale,
+                             TextRenderer::Rotation rotation = TextRenderer::Rotation::NONE);
+
+        /// @brief Get the length of a line of text, along the direction it runs
         /// @param[in] text - null-terminated text
         /// @param[in] scale - size multiplier (1 = 6x8 pixels per character)
-        /// @return width of the text, in pixels (the height is TextRenderer::CHAR_HEIGHT * scale)
+        /// @return width of unrotated text, or height of rotated text, in pixels
         static int TextWidth(const char* text, int scale);
 };

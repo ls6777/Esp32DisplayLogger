@@ -7,9 +7,9 @@
 #include "TargetPort.hpp"
 
 /// @brief Hello world task
-/// @details Shows "Hello World!" on the LCD once, at start up. Then prints a hello message once a second. The output
-///          goes into the printf buffer and is sent to the UART by the PrintfTask. Every 10 messages it also prints
-///          the printf buffer high water mark.
+/// @details Prints a hello message once a second. The output goes into the printf buffer and is sent to the UART by
+///          the PrintfTask. Every 10 messages it also prints the printf buffer high water mark. (The LCD is drawn by
+///          DisplayTask.)
 ///
 ///          Registers with the task monitor with a 5 second timeout and checks in when the monitor asks.
 class HelloTask
@@ -38,7 +38,7 @@ class HelloTask
         /// @param[in] id - ID of the message to send
         static void SendMessage(Message::MsgId id);
 
-        /// @brief Handle the initialize message: register with the task monitor and show "Hello World!" on the LCD
+        /// @brief Handle the initialize message: register with the task monitor
         void HandleInitialize();
 
         /// @brief Print the hello message, and the printf buffer high water mark every 10 messages

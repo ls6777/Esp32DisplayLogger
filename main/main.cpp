@@ -1,12 +1,14 @@
 /// @file main.cpp
-/// @brief Hello world application: creates the PrintfTask, the TaskMonitor and the HelloTask.
+/// @brief Hello world application: creates the PrintfTask, the TaskMonitor, the HelloTask and the DisplayTask.
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "Display.hpp"
+#include "DisplayTask.hpp"
 #include "HelloTask.hpp"
 #include "PrintfTask.hpp"
+#include "PrintUtils.hpp"
 #include "TaskMonitor.hpp"
 
 extern "C" void app_main(void); ///< ESP-IDF application entry point (C linkage)
@@ -19,6 +21,9 @@ constexpr UBaseType_t PRINTF_TASK_PRIORITY = 1;                         ///< Pri
 
 constexpr uint32_t HELLO_TASK_STACK_SIZE = 2048;                        ///< HelloTask stack size, in bytes
 constexpr UBaseType_t HELLO_TASK_PRIORITY = 5;                          ///< HelloTask priority
+
+constexpr uint32_t DISPLAY_TASK_STACK_SIZE = 3072;                      ///< DisplayTask stack size, in bytes (snprintf)
+constexpr UBaseType_t DISPLAY_TASK_PRIORITY = 3;                        ///< DisplayTask priority
 
 //------------------------------------------------------------------
 // StartTaskMonitor
@@ -55,6 +60,18 @@ static void StartHelloTask(void* argument)
 }
 
 //------------------------------------------------------------------
+// StartDisplayTask
+//------------------------------------------------------------------
+/// @brief Entry point for the DisplayTask task. Never returns.
+/// @param[in] argument - task argument (unused)
+static void StartDisplayTask(void* argument)
+{
+    DisplayTask task;
+    task.Initialize();
+    task.Run();
+}
+
+//------------------------------------------------------------------
 // Main Task
 //------------------------------------------------------------------
 /// @brief Application entry point: sets up stdout buffering, the display and the task monitor, then creates the tasks
@@ -63,6 +80,9 @@ void app_main(void)
 {
     // Route printf into the printf buffer before any task prints, so all task output is buffered
     PrintfTask::Initialize();
+
+    // Show everything sent to the UART on the LCD terminal too (set before the PrintfTask starts)
+    PrintUtils::SetMirror(&DisplayTask::MirrorOutput);
 
     // Set up the LCD before any task draws on it (blocks for a few hundred ms during the panel reset)
     Display::Initialize();
@@ -78,4 +98,7 @@ void app_main(void)
 
     // Hello task
     xTaskCreate(&StartHelloTask, "HelloTask", HELLO_TASK_STACK_SIZE, nullptr, HELLO_TASK_PRIORITY, nullptr);
+
+    // Display task
+    xTaskCreate(&StartDisplayTask, "DisplayTask", DISPLAY_TASK_STACK_SIZE, nullptr, DISPLAY_TASK_PRIORITY, nullptr);
 }

@@ -5,6 +5,30 @@
 #include "StdOutPort.hpp"
 
 PrintBuffer<PrintUtils::BUFFER_SIZE> PrintUtils::printBuffer;
+PrintUtils::MirrorFn PrintUtils::mirrorFn = nullptr;
+
+//------------------------------------------------------------------
+// SetMirror
+//------------------------------------------------------------------
+void PrintUtils::SetMirror(MirrorFn mirror)
+{
+    mirrorFn = mirror;
+}
+
+//------------------------------------------------------------------
+// WriteAndMirror
+//------------------------------------------------------------------
+int PrintUtils::WriteAndMirror(const char* data, int len)
+{
+    const int written = StdOutPort::Write(data, len);
+
+    // Mirror only what the real stdout accepted, so the copy matches the output exactly
+    if ((written > 0) && (nullptr != mirrorFn))
+    {
+        mirrorFn(data, written);
+    }
+    return written;
+}
 
 //------------------------------------------------------------------
 // InitStdOut
@@ -27,7 +51,7 @@ int PrintUtils::Write(const char* data, int len)
 //------------------------------------------------------------------
 int PrintUtils::TransmitData()
 {
-    return printBuffer.Transmit(StdOutPort::Write);
+    return printBuffer.Transmit(WriteAndMirror);
 }
 
 //------------------------------------------------------------------

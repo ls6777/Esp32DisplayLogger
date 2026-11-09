@@ -33,19 +33,30 @@ class Color
 };
 
 /// @brief Renders characters of the 5x7 font (Font5x7.hpp) into RGB565 pixel buffers
-/// @details Static class: holds no state. Each character fills a cell of CHAR_WIDTH x CHAR_HEIGHT pixels times the
-///          scale: the 5x7 glyph in the top left, plus one blank column on the right and one blank row at the bottom
-///          to separate characters and lines.
+/// @details Static class: holds no state. Unrotated, each character fills a cell of CHAR_WIDTH x CHAR_HEIGHT pixels
+///          times the scale: the 5x7 glyph in the top left, plus one blank column on the right and one blank row at
+///          the bottom to separate characters and lines.
+///
+///          Rotated 90 degrees clockwise, the cell is CHAR_HEIGHT wide and CHAR_WIDTH high: the top of the glyph faces
+///          right, the blank column is at the bottom (between characters, which run top to bottom) and the blank row
+///          is on the left.
 class TextRenderer
 {
     public:
 
-        static constexpr int CHAR_WIDTH = 6;    ///< Width of a character cell at scale 1, in pixels
-        static constexpr int CHAR_HEIGHT = 8;   ///< Height of a character cell at scale 1, in pixels
+        static constexpr int CHAR_WIDTH = 6;    ///< Width of an unrotated character cell at scale 1, in pixels
+        static constexpr int CHAR_HEIGHT = 8;   ///< Height of an unrotated character cell at scale 1, in pixels
+
+        /// @brief Orientation of rendered text
+        enum class Rotation
+        {
+            NONE,   ///< Normal: characters run left to right
+            CW90    ///< Rotated 90 degrees clockwise: characters run top to bottom, tops facing right
+        };
 
         TextRenderer() = delete;
 
-        /// @brief Get the number of pixels in a character cell
+        /// @brief Get the number of pixels in a character cell (the same for every rotation)
         /// @param[in] scale - size multiplier (1 = 6x8 pixels)
         /// @return pixels needed in the buffer passed to RenderChar()
         static constexpr int CellPixels(int scale)
@@ -53,11 +64,32 @@ class TextRenderer
             return (CHAR_WIDTH * scale) * (CHAR_HEIGHT * scale);
         }
 
+        /// @brief Get the width of a character cell
+        /// @param[in] scale - size multiplier (1 = 6x8 pixels)
+        /// @param[in] rotation - orientation of the text
+        /// @return width, in pixels
+        static constexpr int CellWidth(int scale, Rotation rotation)
+        {
+            return ((rotation == Rotation::NONE) ? CHAR_WIDTH : CHAR_HEIGHT) * scale;
+        }
+
+        /// @brief Get the height of a character cell
+        /// @param[in] scale - size multiplier (1 = 6x8 pixels)
+        /// @param[in] rotation - orientation of the text
+        /// @return height, in pixels
+        static constexpr int CellHeight(int scale, Rotation rotation)
+        {
+            return ((rotation == Rotation::NONE) ? CHAR_HEIGHT : CHAR_WIDTH) * scale;
+        }
+
         /// @brief Render one character cell into a pixel buffer
         /// @param[in] c - character to render. Characters outside the font are shown as '?'.
         /// @param[in] fg - color of the character
         /// @param[in] bg - color of the rest of the cell
         /// @param[in] scale - size multiplier (1 = 6x8 pixels). Must be > 0.
-        /// @param[out] buf - buffer of at least CellPixels(scale) pixels, filled row by row, left to right
-        static void RenderChar(char c, uint16_t fg, uint16_t bg, int scale, uint16_t* buf);
+        /// @param[out] buf - buffer of at least CellPixels(scale) pixels, filled row by row, left to right, for a
+        ///                   cell of CellWidth() x CellHeight() pixels
+        /// @param[in] rotation - orientation of the text
+        static void RenderChar(char c, uint16_t fg, uint16_t bg, int scale, uint16_t* buf,
+                               Rotation rotation = Rotation::NONE);
 };

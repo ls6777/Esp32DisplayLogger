@@ -4,6 +4,7 @@
 #include "TargetPort.hpp"
 
 #include "esp_task_wdt.h"
+#include "freertos/idf_additions.h"
 
 #include <cstdio>
 
@@ -115,4 +116,21 @@ void TargetPort::GetRunTimeStats(char* buf, size_t size)
     {
         vTaskGetRunTimeStats(buf);
     }
+}
+
+//------------------------------------------------------------------
+// GetCpuTimes
+//------------------------------------------------------------------
+void TargetPort::GetCpuTimes(uint32_t& idleTime, uint32_t& totalTime)
+{
+    // Both come from the run-time stats clock (esp_timer, in us). The idle counters only advance when an idle task is
+    // switched out, so a reading can lag by up to one scheduling interval.
+    uint32_t idle = 0;
+    for (BaseType_t core = 0; core < configNUMBER_OF_CORES; core++)
+    {
+        idle += static_cast<uint32_t>(ulTaskGetIdleRunTimeCounterForCore(core));
+    }
+
+    idleTime = idle;
+    totalTime = static_cast<uint32_t>(portGET_RUN_TIME_COUNTER_VALUE()) * static_cast<uint32_t>(configNUMBER_OF_CORES);
 }

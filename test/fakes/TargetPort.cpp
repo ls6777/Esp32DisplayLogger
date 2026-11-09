@@ -23,10 +23,14 @@ namespace
 }
 
 uint32_t FakeTargetPort::timeMs = 0;
+uint32_t FakeTargetPort::cpuBusyPercent = 0;
+uint32_t FakeTargetPort::cpuIdleTime = 0;
+uint32_t FakeTargetPort::cpuTotalTime = 0;
 TaskHandle FakeTargetPort::currentTask = nullptr;
 int FakeTargetPort::recvBudget = -1;
 int FakeTargetPort::delayBudget = -1;
 std::function<void()> FakeTargetPort::onDelay;
+std::function<void()> FakeTargetPort::onRecv;
 std::vector<uint32_t> FakeTargetPort::delays;
 std::vector<FakeTargetPort::SentItem> FakeTargetPort::sent;
 int FakeTargetPort::watchdogStarts = 0;
@@ -42,9 +46,11 @@ void FakeTargetPort::Reset()
 {
     queues.clear();
     currentTask = nullptr;
+    cpuBusyPercent = 0;
     recvBudget = -1;
     delayBudget = -1;
     onDelay = nullptr;
+    onRecv = nullptr;
     delays.clear();
     sent.clear();
     watchdogStarts = 0;
@@ -67,6 +73,15 @@ void FakeTargetPort::RecordError(const char* tag, const char* format, ...)
     lastError = buf;
 }
 
+void FakeTargetPort::AdvanceTime(uint32_t ms)
+{
+    timeMs += ms;
+
+    const uint32_t total = ms * 1000 * FAKE_CORES;
+    cpuTotalTime += total;
+    cpuIdleTime += total - ((total / 100) * cpuBusyPercent);
+}
+
 void FakeTargetPort::Delay(uint32_t ticks)
 {
     if (onDelay)
@@ -85,7 +100,7 @@ void FakeTargetPort::Delay(uint32_t ticks)
         delayBudget--;
     }
 
-    timeMs += ticks;
+    AdvanceTime(ticks);
 }
 
 size_t FakeTargetPort::QueueCount(QHandle q)
@@ -168,13 +183,18 @@ StatusType TargetPort::QRecv(QHandle qId, void* buf, uint32_t timeout)
         FakeTargetPort::recvBudget--;
     }
 
+    if (FakeTargetPort::onRecv)
+    {
+        FakeTargetPort::onRecv();
+    }
+
     if (qId->items.empty())
     {
         if (timeout == MAX_DELAY)
         {
             throw StopRun();
         }
-        FakeTargetPort::timeMs += timeout;
+        FakeTargetPort::AdvanceTime(timeout);
         return FAIL;
     }
 
@@ -186,6 +206,12 @@ StatusType TargetPort::QRecv(QHandle qId, void* buf, uint32_t timeout)
 void TargetPort::GetTaskList(char* buf, size_t size)
 {
     std::snprintf(buf, size, "fake task list\r\n");
+}
+
+void TargetPort::GetCpuTimes(uint32_t& idleTime, uint32_t& totalTime)
+{
+    idleTime = FakeTargetPort::cpuIdleTime;
+    totalTime = FakeTargetPort::cpuTotalTime;
 }
 
 void TargetPort::GetRunTimeStats(char* buf, size_t size)
