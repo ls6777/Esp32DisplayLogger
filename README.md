@@ -96,6 +96,9 @@ How the text gets there:
 3. At least every 50 ms, `DisplayTask` moves the buffered output into its `TextConsole` and redraws only the characters that changed. When the terminal scrolls, similar lines (e.g. `Hello world! 41` replacing `Hello world! 40`) only need their changed digits redrawn, which keeps the SPI time, and so the CPU usage it adds, low.
 
 `TextConsole` handles `
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ls6777)
+
 ` and `
 ` line endings, ``, blank lines and tabs, and ignores ANSI escape sequences (log colors) and other control characters.
 
